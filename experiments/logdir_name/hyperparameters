@@ -1,0 +1,11 @@
+learning_rate: 0.2
+noise: 0.03
+env_name: Laikago-v0
+episode_length: 10
+direction ratio: 2.0
+Normal initialization: 1
+Gait: trot
+Incline_Orientaion_Anti-Clockwise: True
+domain_Randomization: 1
+Curriculmn introduced at iteration: 10
+

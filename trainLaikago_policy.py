@@ -214,7 +214,7 @@ def policyevaluation(env, policy, hp):
         # Evaluation Dataset without domain randomization
         # --------------------------------------------------------------
         incline_deg_range = [2, 3]  # 11, 13
-        incline_ori_range = [0, 2, 3]  # 0, 30, 45 degree
+        incline_ori_range = [0]  # 0, 30, 45 degree
         # --------------------------------------------------------------
         total_combinations = len(incline_deg_range) * len(incline_ori_range)
 
@@ -256,7 +256,7 @@ def train(env, policy, hp, parentPipes, args):
         else:
             env.randomize_only_inclines()
         # Cirriculum learning
-        if (step > hp.curilearn):
+        if step > hp.curilearn:
             avail_deg = [7, 9, 11, 13]
             env.incline_deg = avail_deg[random.randint(0, 3)]
         else:
@@ -296,7 +296,7 @@ def train(env, policy, hp, parentPipes, args):
                     total_steps = total_steps + step_count
                     temp_p = temp_p + 1
                 p = p + process_count
-                print('total steps till now: ', total_steps, 'Processes done: ', p)
+                # print('total steps till now: ', total_steps, 'Processes done: ', p)
 
         else:
             # Getting the positive rewards in the positive directions
@@ -321,6 +321,10 @@ def train(env, policy, hp, parentPipes, args):
         # Updating our policy
         policy.update(rollouts, sigma_r, args)
 
+        print("Total steps:", total_steps)
+        print('Step:', step)
+        print("----------------------------------")
+
         # Start evaluating after only second stage
         if step >= hp.curilearn:
             # policy evaluation after specified iterations
@@ -328,7 +332,7 @@ def train(env, policy, hp, parentPipes, args):
                 reward_evaluation = policyevaluation(env, policy, hp)
                 logger.log_kv('steps', step)
                 logger.log_kv('return', reward_evaluation)
-                if (reward_evaluation > best_return):
+                if reward_evaluation > best_return:
                     best_policy = policy.theta
                     best_return = reward_evaluation
                     np.save(log_dir + "/iterations/best_policy.npy", best_policy)
@@ -358,7 +362,7 @@ if __name__ == "__main__":
     parser.add_argument('--steps', help='Number of steps', type=int, default=10000)
     parser.add_argument('--policy', help='Starting policy file (npy)', type=str, default='')
     parser.add_argument('--logdir', help='Directory root to log policy files (npy)', type=str, default='logdir_name')
-    parser.add_argument('--mp', help='Enable multiprocessing', type=int, default=1)
+    parser.add_argument('--mp', help='Enable multiprocessing', type=int, default=0)
     # these you have to set
     parser.add_argument('--lr', help='learning rate', type=float, default=0.2)
     parser.add_argument('--noise', help='noise hyperparameter', type=float, default=0.03)
@@ -380,13 +384,13 @@ if __name__ == "__main__":
     trot = [0, PI, PI, 0]
     custom_phase = [0, PI, PI + 0.1, 0.1]
     phase = 0
-    if (args.gait == "trot"):
+    if args.gait == "trot":
         phase = trot
-    elif (args.gait == "canter"):
+    elif args.gait == "canter":
         phase = canter
-    elif (args.gait == "bound"):
+    elif args.gait == "bound":
         phase = bound
-    elif (args.gait == "walk"):
+    elif args.gait == "walk":
         phase = walk
     elif (args.gait == "custom_phase1"):
         phase = custom_phase
@@ -442,7 +446,7 @@ if __name__ == "__main__":
     nb_inputs = env.observation_space.sample().shape[0]
     nb_outputs = env.action_space.sample().shape[0]
     policy = Policy(nb_inputs, nb_outputs, hp.env_name, hp.normal, args)
-    print("start training")
+    print("================== Start Training ==================")
 
     train(env, policy, hp, parentPipes, args)
 

@@ -1,0 +1,6 @@
+pybullet
+gym
+scikit-learn
+fabulous
+numpy
+fabulous
