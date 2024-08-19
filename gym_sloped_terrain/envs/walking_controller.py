@@ -16,11 +16,18 @@ from collections import namedtuple
 # from utils.ik_class import Stoch2Kinematics
 # from utils.ik_class import LaikagoKinematics
 # from utils.ik_class import HyqKinematics
-from SlopedTerrainLinearPolicy.utils.solo12_kinematic import Solo12Kinematic
+from utils.solo12_kinematic import Solo12Kinematic
 import numpy as np
 
 PI = np.pi
 no_of_points = 100
+
+
+def constrain_theta(theta):
+    theta = np.fmod(theta, 2 * no_of_points)
+    if theta < 0:
+        theta = theta + 2 * no_of_points
+    return theta
 
 
 @dataclass
@@ -77,22 +84,15 @@ class WalkingController:
 
     def update_leg_theta(self, theta):
         """ Depending on the gait, the theta for every leg is calculated"""
-
-        def constrain_theta(theta):
-            theta = np.fmod(theta, 2 * no_of_points)
-            if theta < 0:
-                theta = theta + 2 * no_of_points
-            return theta
-
         self.front_right.theta = constrain_theta(theta + self._phase.front_right)
         self.front_left.theta = constrain_theta(theta + self._phase.front_left)
         self.back_right.theta = constrain_theta(theta + self._phase.back_right)
         self.back_left.theta = constrain_theta(theta + self._phase.back_left)
 
     def initialize_elipse_shift(self, Yshift, Xshift, Zshift):
-        '''
+        """
         Initialize desired X, Y, Z offsets of elliptical trajectory for each leg
-        '''
+        """
         self.front_right.y_shift = Yshift[0]
         self.front_left.y_shift = Yshift[1]
         self.back_right.y_shift = Yshift[2]
@@ -109,14 +109,14 @@ class WalkingController:
         self.back_left.z_shift = Zshift[3]
 
     def initialize_leg_state(self, theta, action):
-        '''
+        """
         Initialize all the parameters of the leg trajectories
         Args:
             theta  : trajectory cycle parameter theta
             action : trajectory modulation parameters predicted by the policy
         Ret:
             legs   : namedtuple('legs', 'front_right front_left back_right back_left')
-        '''
+        """
         Legs = namedtuple('legs', 'front_right front_left back_right back_left')
         legs = Legs(front_right=self.front_right, front_left=self.front_left, back_right=self.back_right,
                     back_left=self.back_left)
@@ -178,52 +178,53 @@ class WalkingController:
     #     return leg_motor_angles
 
     def run_elliptical_Traj_HyQ(self, theta, action):
-        '''
+        """
         Semi-elliptical trajectory controller
         Args:
             theta  : trajectory cycle parameter theta
             action : trajectory modulation parameters predicted by the policy
         Ret:
             leg_motor_angles : list of motors positions for the desired action [FLH FLK FRH FRK BLH BLK BRH BRK FLA FRA BLA BRA]
-        '''
-        global x, y
+        """
         legs = self.initialize_leg_state(theta, action)
 
-        y_center = -0.7
-        foot_clearance = 0.12
+        # Parameters for elip --------------------
+        step_height = 0.04
+        y_center = -0.23
+        phi = np.radians(90)
+        # ----------------------------------------
 
+        x = y = 0
         for leg in legs:
-            leg_theta = (leg.theta / (2 * no_of_points)) * 2 * PI
+            leg_theta = (leg.theta / (2 * self.no_of_points)) * 2 * np.pi
             leg.r = leg.step_length / 2
-
             if self.gait_type == "trot":
-                x = -leg.r * np.cos(leg_theta) - leg.x_shift
-                if leg_theta > PI:
+                x = -leg.r * np.cos(leg_theta) + leg.x_shift
+                if leg_theta > np.pi:
                     flag = 0
                 else:
                     flag = 1
-                y = foot_clearance * np.sin(leg_theta) * flag + y_center - leg.y_shift
+                y = step_height * np.sin(leg_theta) * flag + y_center + leg.y_shift
 
             leg.x, leg.y, leg.z = np.array(
-                [[np.cos(leg.phi), 0, np.sin(leg.phi)],
-
-                 [0, 1, 0], [-np.sin(leg.phi), 0, np.cos(leg.phi)]]) @ np.array(
+                [[np.cos(phi), 0, np.sin(phi)], [0, 1, 0], [-np.sin(phi), 0, np.cos(phi)]]) @ np.array(
                 [x, y, 0])
-            leg.z = leg.z - leg.z_shift
-            leg.z = -1 * leg.z
+            leg.z = leg.z + leg.z_shift
 
-            leg.motor_knee, leg.motor_hip, leg.motor_abduction = self.Solo12_Kin.inverse_kinematics(leg.x, leg.y, leg.z,
-                                                                                                self.leg_name_to_sol_branch_Solo12[
-                                                                                                    leg.name])
+            (leg.motor_knee,
+             leg.motor_hip,
+             leg.motor_abduction) = self.Solo12_Kin.inverse_kinematics(leg.x,
+                                                                       leg.y,
+                                                                       leg.z,
+                                                                       self.leg_name_to_sol_branch_Solo12[leg.name])
+
             leg.motor_hip = leg.motor_hip + self.MOTOROFFSETS_solo12[0]
             leg.motor_knee = leg.motor_knee + self.MOTOROFFSETS_solo12[1]
-            leg.motor_abduction = -1 * leg.motor_abduction
 
-        leg_motor_angles = [legs.front_left.motor_hip, legs.front_left.motor_knee, legs.front_right.motor_hip,
-                            legs.front_right.motor_knee, legs.back_left.motor_hip, legs.back_left.motor_knee,
-                            legs.back_right.motor_hip, legs.back_right.motor_knee, legs.front_left.motor_abduction,
-                            legs.front_right.motor_abduction, legs.back_left.motor_abduction,
-                            legs.back_right.motor_abduction]
+        leg_motor_angles = [legs.front_left.motor_hip, legs.front_left.motor_knee, legs.front_left.motor_abduction,
+                            legs.back_right.motor_hip, legs.back_right.motor_knee, legs.back_right.motor_abduction,
+                            legs.front_right.motor_hip, legs.front_right.motor_knee, legs.front_right.motor_abduction,
+                            legs.back_left.motor_hip, legs.back_left.motor_knee, legs.back_left.motor_abduction]
 
         return leg_motor_angles
 
@@ -279,20 +280,20 @@ class WalkingController:
     #     return leg_motor_angles
 
     def _update_leg_phi_val(self, leg_phi):
-        '''
+        """
         Args:
              leg_phi : steering angles for each leg trajectories
-        '''
+        """
         self.front_right.phi = leg_phi[0]
         self.front_left.phi = leg_phi[1]
         self.back_right.phi = leg_phi[2]
         self.back_left.phi = leg_phi[3]
 
     def _update_leg_step_length_val(self, step_length):
-        '''
+        """
         Args:
             step_length : step length of each leg trajectories
-        '''
+        """
         self.front_right.step_length = step_length[0]
         self.front_left.step_length = step_length[1]
         self.back_right.step_length = step_length[2]
@@ -300,15 +301,14 @@ class WalkingController:
 
 
 def constrain_abduction(angle):
-    '''
+    """
     constrain abduction command with respect to the kinematic limits of the abduction joint
-    '''
+    """
     if angle < 0:
         angle = 0
     elif angle > 0.35:
         angle = 0.35
     return angle
-
 
 # if __name__ == "__main__":
 #     walkcon = WalkingController(phase=[PI, 0, 0, PI])

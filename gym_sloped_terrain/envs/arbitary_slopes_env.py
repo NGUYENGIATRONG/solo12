@@ -28,7 +28,7 @@ no_of_points = 100
 
 def constrain_theta(theta):
 	theta = np.fmod(theta, 2*no_of_points)
-	if(theta < 0):
+	if theta < 0:
 		theta = theta + 2*no_of_points
 	return theta
 
