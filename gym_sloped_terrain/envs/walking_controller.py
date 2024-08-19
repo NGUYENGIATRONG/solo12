@@ -16,7 +16,7 @@ from collections import namedtuple
 # from utils.ik_class import Stoch2Kinematics
 # from utils.ik_class import LaikagoKinematics
 # from utils.ik_class import HyqKinematics
-from utils.solo12_kinematic import Solo12Kinematic
+from SlopedTerrainLinearPolicy.utils.solo12_kinematic import Solo12Kinematic
 import numpy as np
 
 PI = np.pi
@@ -80,7 +80,7 @@ class WalkingController:
 
         def constrain_theta(theta):
             theta = np.fmod(theta, 2 * no_of_points)
-            if (theta < 0):
+            if theta < 0:
                 theta = theta + 2 * no_of_points
             return theta
 
