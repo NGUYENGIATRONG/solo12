@@ -1,0 +1,4 @@
+python3 trainLaikago_policy.py --lr 0.03 --noise 0.04 --directions 3 --gait trot --logdir 19_06 --policy initial_policy_Laikago.npy --action_dim 20 --msg "Traing 19/06" --episode_length 400 --eval_step 1 --domain_Rand 0 --curi_learn 30
+
+python3 trainLaikago_policy.py --lr 0.03 --noise 0.04 --directions 3 --gait trot --logdir 01_07 --policy IP_Laikago.npy --action_dim 24 --msg "Traing 01/07, add new data" --episode_length 400 --eval_step 1 --domain_Rand 0 --curi_learn 30
+
