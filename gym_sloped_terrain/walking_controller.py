@@ -209,7 +209,7 @@ class WalkingController:
             leg.x, leg.y, leg.z = np.array(
                 [[np.cos(phi), 0, np.sin(phi)], [0, 1, 0], [-np.sin(phi), 0, np.cos(phi)]]) @ np.array(
                 [x, y, 0])
-            leg.z = leg.z + leg.z_shift
+            leg.z = leg.z - leg.z_shift
 
             (leg.motor_knee,
              leg.motor_hip,
@@ -220,7 +220,7 @@ class WalkingController:
 
             leg.motor_hip = leg.motor_hip + self.MOTOROFFSETS_solo12[0]
             leg.motor_knee = leg.motor_knee + self.MOTOROFFSETS_solo12[1]
-
+            leg.motor_abduction = -1 * leg.motor_abduction
         leg_motor_angles = [legs.front_left.motor_hip, legs.front_left.motor_knee, legs.front_left.motor_abduction,
                             legs.back_right.motor_hip, legs.back_right.motor_knee, legs.back_right.motor_abduction,
                             legs.front_right.motor_hip, legs.front_right.motor_knee, legs.front_right.motor_abduction,

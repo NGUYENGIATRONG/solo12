@@ -5,9 +5,11 @@ import multiprocessing as mp
 from multiprocessing import Pipe
 import argparse
 import math
+import time
+from datetime import datetime
 # Utils
-from SlopedTerrainLinearPolicy.utils.logger import DataLog
-from SlopedTerrainLinearPolicy.utils.make_train_plots import make_train_plots_ars
+from utils.logger import DataLog
+from utils.make_train_plots import make_train_plots_ars
 import random
 # Registering new environments
 from gym.envs.registration import register
@@ -90,7 +92,7 @@ def ExploreWorker(rank, child_Pipe, envname, arg):
         except (EOFError, KeyboardInterrupt):
             break
         if message == _RESET:
-            _ = env.reset()
+            _ = environment.reset()
             child_Pipe.send(["reset ok"])
             continue
         if message == _EXPLORE:
@@ -98,13 +100,13 @@ def ExploreWorker(rank, child_Pipe, envname, arg):
             hp = payload[1]
             direction = payload[2]
             delta = payload[3]
-            state = env.reset()
+            state = environment.reset()
             done = False
             num_plays = 0.
             sum_rewards = 0
             while num_plays < hp.episode_length:
                 action = data.evaluate(state, delta, direction, hp)
-                state, reward, done, _ = env.step(action)
+                state, reward, done, _ = environment.step(action)
                 sum_rewards += reward
                 num_plays += 1
             childPipe.send([sum_rewards, num_plays])
@@ -119,20 +121,13 @@ def ExploreWorker(rank, child_Pipe, envname, arg):
 
 class Policy:
 
-    def __init__(self, input_size, output_size, env_name, normal, arg):
-        try:
-            print("Training from guided policy,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,")
-            self.theta = np.load(arg.policy)
-        except:
+    def __init__(self, dir_policy, input_size, output_size, normal):
+        if normal:
+            self.theta = np.random.randn(output_size, input_size)
             print("Training from random policy")
-            if normal:
-                print("Training from random policy")
-                self.theta = np.random.randn(output_size, input_size)
-            else:
-                self.theta = np.zeros((output_size, input_size))
-
-        self.env_name = env_name
-        print("Starting policy theta=", self.theta)
+        else:
+            self.theta = np.load(dir_policy)
+            print("Training from policy with guided policy")
 
     def evaluate(self, state_input, delta, direction, hp):
         if direction is None:
@@ -143,13 +138,13 @@ class Policy:
             return np.clip((self.theta - hp.noise * delta).dot(state_input), -1.0, 1.0)
 
     def sample_deltas(self):
-        return [np.random.randn(*self.theta.shape) for _ in range(hp.nb_directions)]
+        return [np.random.randn(*self.theta.shape) for _ in range(hyper_parameters.nb_directions)]
 
     def update(self, rollouts, sigma_r):
         step = np.zeros(self.theta.shape)
         for r_pos, r_neg, direction in rollouts:
             step += (r_pos - r_neg) * direction
-        self.theta += hp.learning_rate / (hp.nb_best_directions * sigma_r) * step
+        self.theta += hyper_parameters.learning_rate / (hyper_parameters.nb_best_directions * sigma_r) * step
         # timestr = time.strftime("%Y%m%d-%H%M%S")
 
 
@@ -176,7 +171,7 @@ def policyevaluation(environment, data, hp):
 
         # Evaluation Dataset with domain randomization
         # --------------------------------------------------------------
-        incline_deg_range = [3, 4]  # 9, 11
+        incline_deg_range = [2, 3]  # 9, 11
         incline_ori_range = [0, 2, 3]  # 0, 60, 90 degree
         fric = [0, 1]  # surface friction 0.55, 0.6
         mf = [0]  # extra mass at front 0gm
@@ -303,7 +298,7 @@ def train(environment, data, hp, parent_pipes, info):
                     negative_rewards[temp_p], step_count = parent_pipes[k].recv()
                     total_steps = total_steps + step_count
                     temp_p = temp_p + 1
-                temp_p = temp_p + process_count
+                p += process_count
                 print('total steps till now: ', total_steps, 'Processes done: ', temp_p)
 
         else:
@@ -360,21 +355,21 @@ def mkdir(base, name):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('--env', help='Gym environment name', type=str, default='solo12')
+    parser.add_argument('--env', help='Gym environment name', type=str, default='Solo12-v4')
     parser.add_argument('--seed', help='RNG seed', type=int, default=1234123)
-    parser.add_argument('--render', help='OpenGL Visualizer', type=int, default=0)
+    parser.add_argument('--render', help='OpenGL Visualizer', type=bool, default=False)
     parser.add_argument('--steps', help='Number of steps', type=int, default=10000)
     parser.add_argument('--policy', help='Starting policy file (npy)', type=str, default='zeros12x11')
-    parser.add_argument('--logdir', help='Directory root to log policy files (npy)', type=str, default='logdir_name')
-    parser.add_argument('--mp', help='Enable multiprocessing', type=int, default=1)
+    parser.add_argument('--logdir', help='Directory root to log policy files (npy)', type=str, default=str(time.strftime("%d_%m")))
+    parser.add_argument('--mp', help='Enable multiprocessing', type=bool, default=True)
     # these you have to set
     parser.add_argument('--lr', help='learning rate', type=float, default=0.2)
     parser.add_argument('--noise', help='noise hyperparameter', type=float, default=0.03)
     parser.add_argument('--episode_length', help='length of each episode', type=float, default=10)
     parser.add_argument('--normal', help='length of each episode', type=int, default=1)
     parser.add_argument('--gait', help='type of gait you want (Only in Stoch2 normal env', type=str, default='trot')
-    parser.add_argument('--msg', help='msg to save in a text file', type=str, default='')
-    parser.add_argument('--stairs', help='add stairs to the bezier environment', type=int, default=0)
+    parser.add_argument('--msg', help='msg to save in a text file', type=str, default='Old policy, new reward fuction')
+    parser.add_argument('--stairs', help='add stairs to the bezier environment', type=bool, default=False)
     parser.add_argument('--action_dim', help='degree of the spline polynomial used in the training', type=int,
                         default=20)
     parser.add_argument('--directions', help='divising factor of total directions to use', type=int, default=2)
@@ -383,7 +378,7 @@ if __name__ == "__main__":
                         type=int, default=20)
     parser.add_argument('--eval_step', help='policy evaluation after how many steps should take place', type=int,
                         default=3)
-    parser.add_argument('--domain_Rand', help='add domain randomization', type=int, default=1)
+    parser.add_argument('--domain_Rand', help='add domain randomization', type=bool, default=False)
     parser.add_argument('--anti_clock_ori', help='rotate the inclines anti-clockwise', type=bool, default=True)
 
     args = parser.parse_args()
@@ -405,38 +400,37 @@ if __name__ == "__main__":
         phase = custom_phase
     # Custom environments that you want to use ----------------------------------------------------------------------------------------
     register(id=args.env,
-             entry_point='gym_sloped_terrain.envs.HyQ_pybullet_env:HyQEnv',
+             entry_point='gym_sloped_terrain.envs.solo12_pybullet_env:Solo12PybulletEnv',
              kwargs={'gait': args.gait, 'render': False, 'action_dim': args.action_dim})
     # ---------------------------------------------------------------------------------------------------------------------------------
-
-    hp = HyperParameters()
+    start_time = time.time()
+    hyper_parameters = HyperParameters()
     args.policy = './initial_policies/' + args.policy
-    hp.msg = args.msg
-    hp.env_name = args.env
-    print("\n\n", hp.env_name, "\n\n")
-    env = gym.make(hp.env_name)
-    hp.seed = args.seed
-    hp.nb_steps = args.steps
-    hp.learning_rate = args.lr
-    hp.noise = args.noise
-    hp.episode_length = args.episode_length
-    hp.nb_directions = int(env.observation_space.sample().shape[0] * env.action_space.sample().shape[0])
-    hp.nb_best_directions = int(hp.nb_directions / args.directions)
-    hp.normal = args.normal
-    hp.gait = args.gait
-    hp.action_dim = args.action_dim
-    hp.stairs = args.stairs
-    hp.curilearn = args.curi_learn
-    hp.evalstep = args.eval_step
-    hp.domain_Rand = args.domain_Rand
-    hp.anti_clock_ori = args.anti_clock_ori
+    hyper_parameters.msg = args.msg
+    hyper_parameters.env_name = args.env
+    print("\n\n", hyper_parameters.env_name, "\n\n")
+    env = gym.make(hyper_parameters.env_name)
+    hyper_parameters.seed = args.seed
+    hyper_parameters.nb_steps = args.steps
+    hyper_parameters.learning_rate = args.lr
+    hyper_parameters.noise = args.noise
+    hyper_parameters.episode_length = args.episode_length
+    hyper_parameters.nb_directions = int(env.observation_space.sample().shape[0] * env.action_space.sample().shape[0])
+    hyper_parameters.nb_best_directions = int(hyper_parameters.nb_directions / args.directions)
+    hyper_parameters.normal = args.normal
+    hyper_parameters.gait = args.gait
+    hyper_parameters.action_dim = args.action_dim
+    hyper_parameters.curilearn = args.curi_learn
+    hyper_parameters.evalstep = args.eval_step
+    hyper_parameters.domain_Rand = args.domain_Rand
+    hyper_parameters.anti_clock_ori = args.anti_clock_ori
     print("log dir", args.logdir)
-    hp.logdir = args.logdir
-    np.random.seed(hp.seed)
+    hyper_parameters.logdir = args.logdir
+    np.random.seed(hyper_parameters.seed)
     max_processes = 20
     parentPipes = None
     if args.mp:
-        num_processes = min([hp.nb_directions, max_processes])
+        num_processes = min([hyper_parameters.nb_directions, max_processes])
         print('processes: ', num_processes)
         processes = []
         childPipes = []
@@ -448,17 +442,28 @@ if __name__ == "__main__":
             childPipes.append(childPipe)
 
         for rank in range(num_processes):
-            p = mp.Process(target=ExploreWorker, args=(rank, childPipes[rank], hp.env_name, args))
+            p = mp.Process(target=ExploreWorker, args=(rank, childPipes[rank], hyper_parameters.env_name, args))
             p.start()
             processes.append(p)
 
     nb_inputs = env.observation_space.sample().shape[0]
     nb_outputs = env.action_space.sample().shape[0]
-    policy = Policy(nb_inputs, nb_outputs, hp.env_name, hp.normal, args)
+    policy = Policy(dir_policy=args.policy,
+                    input_size=nb_inputs,
+                    output_size=nb_outputs,
+                    normal=hyper_parameters.normal)
     print("start training")
 
-    train(env, policy, hp, parentPipes, args)
+    train(env, policy, hyper_parameters, parentPipes, args)
+    end_time = time.time()
+    start_time_str = datetime.fromtimestamp(start_time).strftime('%Y-%m-%d %H:%M:%S')
+    end_time_str = datetime.fromtimestamp(end_time).strftime('%Y-%m-%d %H:%M:%S')
+    run_time = end_time - start_time
 
+    print("Start time:  ", start_time_str)
+    print("End time:    ", end_time_str)
+    print("Run time:    ", run_time / 3600, "hours")
+    print("================== End Training ==================")
     if args.mp:
         for parentPipe in parentPipes:
             parentPipe.send([_CLOSE, "pay2"])

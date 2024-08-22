@@ -4,15 +4,15 @@ import gym
 import os
 from gym import utils, spaces
 import pdb
-import gym_sloped_terrain.envs.walking_controller as walking_controller
+import gym_sloped_terrain.walking_controller as walking_controller
 import time
 import math
 import random
 from collections import deque
 import pybullet
-import gym_sloped_terrain.envs.bullet_client as bullet_client
+import gym_sloped_terrain.bullet_client as bullet_client
 import pybullet_data
-import gym_sloped_terrain.envs.planeEstimation.get_terrain_normal as normal_estimator
+import utils.get_terrain_normal as normal_estimator
 import matplotlib.pyplot as plt
 from scipy.interpolate import interp1d
 

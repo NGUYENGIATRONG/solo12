@@ -1,6 +1,6 @@
 import sys, os
 #sys.path.append(os.path.realpath('../'))
-import gym_sloped_terrain.envs.arbitary_slopes_env as e
+import gym_sloped_terrain.arbitary_slopes_env as e
 import argparse
 from fabulous.color import blue,green,red,bold
 import gym

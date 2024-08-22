@@ -1,12 +1,12 @@
 import numpy as np
 import gym
 from gym import spaces
-from gym_sloped_terrain.envs import walking_controller
+from gym_sloped_terrain import walking_controller
 import math
 import random
 from collections import deque
 import pybullet
-from gym_sloped_terrain.envs import bullet_client
+from gym_sloped_terrain import pybullet_client
 from utils import solo12_kinematic
 
 import pybullet_data
@@ -36,27 +36,27 @@ def constrain_theta(theta):
     return theta
 
 
-def transform_action(action):
-    action = np.clip(action, -1, 1)
-    action[:4] = (action[:4] + 1) / 2  # Step lengths are positive always
-    action[:4] = action[:4] * 0.136  # Max steplength = 0.136
-    action[4:8] = action[4:8] * np.pi / 2  # PHI can be [-pi/2, pi/2]
-    action[8:12] = 0.07 * (action[8:12] + 1) / 2  # elipse center y is positive always
-    action[12:16] = action[12:16] * 0.04  # x
-    action[16:20] = action[16:20] * 0.035  # Max allowed Z-shift due to abduction limits is 3.5cm
-    action[17] = -action[17]
-    action[19] = -action[19]
+# def transform_action(action):
+#     action = np.clip(action, -1, 1)
+#     action[:4] = (action[:4] + 1) / 2  # Step lengths are positive always
+#     action[:4] = action[:4] * 0.136  # Max steplength = 0.136
+#     action[4:8] = action[4:8] * np.pi / 2  # PHI can be [-pi/2, pi/2]
+#     action[8:12] = 0.07 * (action[8:12] + 1) / 2  # elipse center y is positive always
+#     action[12:16] = action[12:16] * 0.04  # x
+#     action[16:20] = action[16:20] * 0.035  # Max allowed Z-shift due to abduction limits is 3.5cm
+#     action[17] = -action[17]
+#     action[19] = -action[19]
+#
+#     return action
 
-    return action
 
-
-def add_noise(sensor_value, sd=0.04):
-    """
-    Adds sensor noise of user defined standard deviation in current sensor_value
-    """
-    noise = np.random.normal(0, sd, 1)
-    sensor_value = sensor_value + noise[0]
-    return sensor_value
+# def add_noise(sensor_value, sd=0.04):
+#     """
+#     Adds sensor noise of user defined standard deviation in current sensor_value
+#     """
+#     noise = np.random.normal(0, sd, 1)
+#     sensor_value = sensor_value + noise[0]
+#     return sensor_value
 
 
 class Solo12PybulletEnv(gym.Env):
@@ -78,16 +78,17 @@ class Solo12PybulletEnv(gym.Env):
                  deg=11):
 
         # global phase
-        self.pd_control_enabled = True
+
         self._is_stairs = stairs
         self._is_wedge = wedge
         self._is_render = render
+        self._on_rack = on_rack
         self.gait = gait
         self.step_length = step_length / 2
         self.step_height = step_height
+        self.pd_control_enabled = True
 
-        self._on_rack = on_rack
-        # self.rh_along_normal = 0.24
+        self.rh_along_normal = 0.24
         self.no_of_points = 100
         self.seed_value = seed_value
         random.seed(self.seed_value)
@@ -127,9 +128,9 @@ class Solo12PybulletEnv(gym.Env):
         self.current_com_height = 0.7
         self.motor_offset = [np.pi / 2, 0, 0]
         if self._is_render:
-            self._pybullet_client = bullet_client.BulletClient(connection_mode=pybullet.GUI)
+            self._pybullet_client = pybullet_client.BulletClient(connection_mode=pybullet.GUI)
         else:
-            self._pybullet_client = bullet_client.BulletClient()
+            self._pybullet_client = pybullet_client.BulletClient()
 
         self._theta = 0
         if self.gait == 'trot':
@@ -183,7 +184,7 @@ class Solo12PybulletEnv(gym.Env):
         self.x_f = 0
         self.y_f = 0
 
-        ## Gym env related mandatory variables
+        # Gym env related mandatory variables
         self._obs_dim = 3 * self.ori_history_length + 2  # [r,p,y]x previous time steps, suport plane roll and pitch
         observation_high = np.array([np.pi / 2] * self._obs_dim)
         observation_low = -observation_high
@@ -236,11 +237,11 @@ class Solo12PybulletEnv(gym.Env):
         self.observation_space = spaces.Box(low=observation_low, high=observation_high, dtype=np.float32)
 
     def hard_reset(self):
-        '''
+        """
         Function to
         1) Set simulation parameters which remains constant throughout the experiments
         2) load urdf of plane, wedge and robot in initial conditions
-        '''
+        """
         self._pybullet_client.resetSimulation()
         self._pybullet_client.setPhysicsEngineParameter(numSolverIterations=int(300))
         self._pybullet_client.setTimeStep(self.dt / self._frame_skip)
@@ -305,26 +306,64 @@ class Solo12PybulletEnv(gym.Env):
     def reset_standing_position(self):
         self.ResetLeg()
         self.ResetPoseForAbd()
+        for i in range(300):
+            self._pybullet_client.stepSimulation()
+
+        self.ResetLeg()
 
     def reset(self, **kwargs):
-        '''
+        """
         This function resets the environment
         Note : Set_Randomization() is called before reset() to either randomize or set environment in default conditions.
-        '''
+        """
         self._theta = 0
         self._last_base_position = [0, 0, 0]
         self._pybullet_client.resetBasePositionAndOrientation(self.solo12, self.INIT_POSITION, self.INIT_ORIENTATION)
         self._pybullet_client.resetBaseVelocity(self.solo12, [0, 0, 0], [0, 0, 0])
         self.reset_standing_position()
+        self._pybullet_client.resetDebugVisualizerCamera(self._cam_dist, self._cam_yaw, self._cam_pitch, [0, 0, 0])
         self.last_yaw = 0
         self.inverse = False
+        if self._is_wedge:
+            self._pybullet_client.removeBody(self.wedge)
 
+            wedge_halfheight_offset = 0.01
+
+            self.wedge_halfheight = wedge_halfheight_offset + 1.5 * math.tan(math.radians(self.incline_deg)) / 2.0
+            self.wedgePos = [0, 0, self.wedge_halfheight]
+            self.wedgeOrientation = self._pybullet_client.getQuaternionFromEuler([0, 0, self.incline_ori])
+
+            if not self.downhill:
+                wedge_model_path = "gym_sloped_terrain/envs/Wedges/uphill/urdf/wedge_" + str(self.incline_deg) + ".urdf"
+
+                self.INIT_ORIENTATION = self._pybullet_client.getQuaternionFromEuler(
+                    [math.radians(self.incline_deg) * math.sin(self.incline_ori),
+                     -math.radians(self.incline_deg) * math.cos(self.incline_ori), 0])
+
+                self.robot_landing_height = wedge_halfheight_offset + 0.65 + math.tan(
+                    math.radians(self.incline_deg)) * abs(self.wedge_start)
+
+                self.INIT_POSITION = [self.INIT_POSITION[0], self.INIT_POSITION[1], self.robot_landing_height]
+
+            else:
+                wedge_model_path = "gym_sloped_terrain/envs/Wedges/downhill/urdf/wedge_" + str(
+                    self.incline_deg) + ".urdf"
+
+                self.robot_landing_height = wedge_halfheight_offset + 0.65 + math.tan(
+                    math.radians(self.incline_deg)) * 1.5
+
+                self.INIT_POSITION = [0, 0, self.robot_landing_height]
+
+                self.INIT_ORIENTATION = [0, 0, 0, 1]
+
+            self.wedge = self._pybullet_client.loadURDF(wedge_model_path, self.wedgePos, self.wedgeOrientation)
+            self.SetWedgeFriction(0.7)
         # self._pybullet_client.resetDebugVisualizerCamera(self._cam_dist, self._cam_yaw, self._cam_pitch, [0, 0, 0])
         self._n_steps = 0
         return self.GetObservation()
 
     def apply_Ext_Force(self, x_f, y_f, link_index=1, visulaize=False, life_time=0.01):
-        '''
+        """
         function to apply external force on the robot
         Args:
             x_f  :  external force in x direction
@@ -332,7 +371,7 @@ class Solo12PybulletEnv(gym.Env):
             link_index : link index of the robot where the force need to be applied
             visulaize  :  bool, whether to visulaize external force by arrow symbols
             life_time  :  life time of the visualization
-         '''
+         """
         force_applied = [x_f, y_f, 0]
         self._pybullet_client.applyExternalForce(self.solo12, link_index, forceObj=[x_f, y_f, 0], posObj=[0, 0, 0],
                                                  flags=self._pybullet_client.LINK_FRAME)
@@ -411,7 +450,7 @@ class Solo12PybulletEnv(gym.Env):
         return self._n_steps * self.dt
 
     def SetLinkMass(self, link_idx, mass=0):
-        '''
+        """
         Function to add extra mass to front and back link of the robot
 
         Args:
@@ -421,7 +460,7 @@ class Solo12PybulletEnv(gym.Env):
         Ret:
             new_mass : mass of the link after addition
         Note : Presently, this function supports addition of masses in the front and back link only (0, 11)
-        '''
+        """
         link_mass = self._pybullet_client.getDynamicsInfo(self.solo12, link_idx)[0]
         if link_idx == 0:
             link_mass = mass + 1.1
@@ -433,13 +472,13 @@ class Solo12PybulletEnv(gym.Env):
         return link_mass
 
     def getlinkmass(self, link_idx):
-        '''
+        """
         function to retrieve mass of any link
         Args:
             link_idx : link index of the robot
         Ret:
             m[0] : mass of the link
-        '''
+        """
         m = self._pybullet_client.getDynamicsInfo(self.solo12, link_idx)
         return m[0]
 
@@ -586,41 +625,41 @@ class Solo12PybulletEnv(gym.Env):
 
         return foot_contact_info
 
-    def apply_action(self, action):
-        # Todo: change action
-        # motor_commands = self.walking_controller.test_elip(theta=self.theta)
-        # motor_commands = np.array(motor_commands)
+    # def apply_action(self, action):
+    #     # Todo: change action
+    #     # motor_commands = self.walking_controller.test_elip(theta=self.theta)
+    #     # motor_commands = np.array(motor_commands)
+    #
+    #     # Update theta
+    #     # omega = 2 * self.no_of_points * self.frequency
+    #     # self.theta = np.fmod(omega * self.dt + self.theta, 2 * self.no_of_points)
+    #
+    #     force_visualizing_counter = 0
+    #     action = np.array(action)
+    #     print("action: ", action)
+    #     action = transform_action(action)
+    #     print(action)
+    #     action = self.transform_action(action)
 
-        # Update theta
-        # omega = 2 * self.no_of_points * self.frequency
-        # self.theta = np.fmod(omega * self.dt + self.theta, 2 * self.no_of_points)
-
-        force_visualizing_counter = 0
-        action = np.array(action)
-        print("action: ", action)
-        action = transform_action(action)
-        print(action)
-        action = self.transform_action(action)
-
-        # Apply action
-        for _ in range(self._frame_skip):
-            if self.pd_control_enabled:
-                self.apply_pd_control(action)
-            else:
-                self.apply_pd_control(action)
-            self._pybullet_client.stepSimulation()
-            if self._n_steps % 300 == 0:
-                force_visualizing_counter += 1
-                link = np.random.randint(0, 11)
-                pertub_range = [0, -120, 120, -200, 200]
-                y_force = pertub_range[np.random.randint(0, 4)]
-                if force_visualizing_counter % 10 == 0:
-                    self.apply_Ext_Force(x_f=0, y_f=y_force, link_index=1, visulaize=True, life_time=0.2)
-
-        self._n_steps += 1
+    # # Apply action
+    # for _ in range(self._frame_skip):
+    #     if self.pd_control_enabled:
+    #         self.apply_pd_control(action)
+    #     else:
+    #         self.apply_pd_control(action)
+    #     self._pybullet_client.stepSimulation()
+    #     if self._n_steps % 300 == 0:
+    #         force_visualizing_counter += 1
+    #         link = np.random.randint(0, 11)
+    #         pertub_range = [0, -120, 120, -200, 200]
+    #         y_force = pertub_range[np.random.randint(0, 4)]
+    #         if force_visualizing_counter % 10 == 0:
+    #             self.apply_Ext_Force(x_f=0, y_f=y_force, link_index=1, visulaize=True, life_time=0.2)
+    #
+    # self._n_steps += 1
 
     def step(self, action):
-        self.apply_action(action)
+        # self.apply_action(action)
         action = self.transform_action(action)
 
         self.do_simulation(action, n_frames=self._frame_skip)
@@ -814,7 +853,8 @@ class Solo12PybulletEnv(gym.Env):
         qpos_act = self.GetMotorAngles()
         qvel_act = self.GetMotorVelocities()
         applied_motor_torque = self._kp * (motor_commands - qpos_act) + self._kd * (motor_vel_commands - qvel_act)
-        applied_motor_torque = np.clip(np.array(applied_motor_torque), -self.clips, self.clips)
+        motor_strength = 200
+        applied_motor_torque = np.clip(np.array(applied_motor_torque), -motor_strength, motor_strength)
         applied_motor_torque = applied_motor_torque.tolist()
 
         for motor_id, motor_torque in zip(self._motor_id_list, applied_motor_torque):
@@ -836,18 +876,19 @@ class Solo12PybulletEnv(gym.Env):
         Ret:
             obs : [R(t-2), P(t-2), Y(t-2), R(t-1), P(t-1), Y(t-1), R(t), P(t), Y(t), estimated support plane (roll, pitch) ]
         '''
-        motor_angles = np.array(self.GetMotorAngles(), dtype=np.float32)
-        motor_velocities = np.array(self.GetMotorVelocities(), dtype=np.float32)
+        # motor_angles = np.array(self.GetMotorAngles(), dtype=np.float32)
+        # motor_velocities = np.array(self.GetMotorVelocities(), dtype=np.float32)
         pos, ori = self.GetBasePosAndOrientation()
         RPY = self._pybullet_client.getEulerFromQuaternion(ori)
         RPY = np.array(RPY, dtype=np.float32)
 
-        # for val in RPY:
-        #     if self.add_IMU_noise:
-        #         val = self.add_noise(val)
-        #     self.ori_history_queue.append(val)
+        for val in RPY:
+            if self.add_IMU_noise:
+                val = self.add_noise(val)
+            self.ori_history_queue.append(val)
 
-        obs = np.concatenate((motor_angles, motor_velocities, RPY))
+        obs = np.concatenate(
+            (self.ori_history_queue, [self.support_plane_estimated_roll, self.support_plane_estimated_pitch])).ravel()
 
         return obs
 
@@ -963,7 +1004,7 @@ class Solo12PybulletEnv(gym.Env):
         joint_name_to_id : Dictionary of joint_name to motor_id
         motor_id_list	 : List of joint_ids for respective motors in order [FLH FLK FRH FRK BLH BLK BRH BRK FLA FRA BLA BRA ]
         """
-        num_joints = self._pybullet_client.getNumJoints(self.solo12)
+        num_joints = self._pybullet_client.getNumJoints(self.solo12)  #12
         joint_name_to_id = {}
         for i in range(num_joints):
             joint_info = self._pybullet_client.getJointInfo(self.solo12, i)
@@ -974,14 +1015,29 @@ class Solo12PybulletEnv(gym.Env):
         motor_id_list = [joint_name_to_id[motor_name] for motor_name in MOTOR_NAMES]
 
         return joint_name_to_id, motor_id_list
+        #{
+
+    #{joint_name_to_id:
+    # "motor_hip_fl": 0,
+    # "motor_knee_fl": 1,
+    # "motor_abduction_fl": 2,
+    # "motor_hip_hr": 3,
+    # "motor_knee_hr": 4,
+    # "motor_abduction_hr": 5,
+    # "motor_hip_fr": 6,
+    # "motor_knee_fr": 7,
+    # "motor_abduction_fr": 8,
+    # "motor_hip_hl": 9,
+    # "motor_knee_hl": 10,
+    # "motor_abduction_hl": 11
 
     def ResetLeg(self):
         """
         function to reset hip and knee joints' state
         Args:
-             leg_id 		  : denotes leg index
-             add_constraint   : bool to create constraints in lower joints of five bar leg mechanisim
-             standstilltorque : value of initial torque to set in hip and knee motors for standing condition
+             # leg_id 		  : denotes leg index
+             # add_constraint   : bool to create constraints in lower joints of five bar leg mechanisim
+             # standstilltorque : value of initial torque to set in hip and knee motors for standing condition
         """
         self._pybullet_client.resetJointState(self.solo12,
                                               self._joint_name_to_id["motor_hip_fl"],

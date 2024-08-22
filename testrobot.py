@@ -1,4 +1,4 @@
-from gym_sloped_terrain.envs import solo12_pybulet_env
+from gym_sloped_terrain import solo12_pybulet_env
 import numpy as np
 action_temp = [0] * 20
 robot = solo12_pybulet_env.Solo12PybulletEnv(on_rack=False)

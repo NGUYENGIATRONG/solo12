@@ -1,5 +1,5 @@
 import sys, os
-import gym_sloped_terrain.envs.Laikago_pybullet_env as e
+import gym_sloped_terrain.Laikago_pybullet_env as e
 import argparse
 from fabulous.color import blue, green, red, bold
 import numpy as np
