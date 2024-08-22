@@ -400,8 +400,8 @@ if __name__ == "__main__":
         phase = custom_phase
     # Custom environments that you want to use ----------------------------------------------------------------------------------------
     register(id=args.env,
-             entry_point='gym_sloped_terrain.envs.solo12_pybullet_env:Solo12PybulletEnv',
-             kwargs={'gait': args.gait, 'render': False, 'action_dim': args.action_dim})
+             entry_point='simulation.solo_pybullet_env:Solo12PybulletEnv',
+             kwargs={'gait': args.gait, 'render': False, 'action_dim': args.action_dim, 'stairs': args.stairs})
     # ---------------------------------------------------------------------------------------------------------------------------------
     start_time = time.time()
     hyper_parameters = HyperParameters()

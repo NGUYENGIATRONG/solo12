@@ -1,14 +1,14 @@
 import numpy as np
 import gym
 from gym import spaces
-import gym_sloped_terrain.envs.walking_controller as walking_controller
+import simulation.walking_controller as walking_controller
 import math
 import random
 from collections import deque
 import pybullet
-import gym_sloped_terrain.envs.bullet_client as bullet_client
+import simulation.bullet_client as bullet_client
 import pybullet_data
-import gym_sloped_terrain.envs.planeEstimation.get_terrain_normal as normal_estimator
+import simulation.planeEstimation.get_terrain_normal as normal_estimator
 
 LEG_POSITION = ["fl_", "bl_", "fr_", "br_"]
 KNEE_CONSTRAINT_POINT_RIGHT = [0.014, 0, 0.076]  # hip

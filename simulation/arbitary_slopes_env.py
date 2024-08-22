@@ -4,13 +4,13 @@ import gym
 import os
 from gym import utils, spaces
 import pdb
-import gym_sloped_terrain.walking_controller as walking_controller
+import simulation.walking_controller as walking_controller
 import time
 import math
 import random
 from collections import deque
 import pybullet
-import gym_sloped_terrain.bullet_client as bullet_client
+import simulation.bullet_client as bullet_client
 import pybullet_data
 import utils.get_terrain_normal as normal_estimator
 import matplotlib.pyplot as plt

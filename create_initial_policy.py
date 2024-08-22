@@ -1,6 +1,6 @@
 import numpy as np
 
-import gym_sloped_terrain.Laikago_pybullet_env as l
+import simulation.solo_pybulet_env as l
 import argparse
 from sklearn.linear_model import LinearRegression
 from sklearn.metrics import mean_squared_error, r2_score

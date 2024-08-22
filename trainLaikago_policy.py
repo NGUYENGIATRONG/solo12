@@ -5,7 +5,7 @@ import inspect
 import os
 import numpy as np
 import gym
-import gym_sloped_terrain.Laikago_pybullet_env as e
+import simulation.Laikago_pybullet_env as e
 from gym import wrappers
 import time
 import multiprocessing as mp

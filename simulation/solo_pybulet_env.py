@@ -1,12 +1,12 @@
 import numpy as np
 import gym
 from gym import spaces
-from gym_sloped_terrain import walking_controller
+from simulation import walking_controller
 import math
 import random
 from collections import deque
 import pybullet
-from gym_sloped_terrain import pybullet_client
+from simulation import pybullet_client
 from utils import solo12_kinematic
 
 import pybullet_data
@@ -259,7 +259,7 @@ class Solo12PybulletEnv(gym.Env):
             self.wedgeOrientation = self._pybullet_client.getQuaternionFromEuler([0, 0, self.incline_ori])
 
             if not self.downhill:
-                wedge_model_path = "SlopedTerrainLinearPolicy/gym_sloped_terrain/envs/Wedges/uphill/urdf/wedge_" + str(
+                wedge_model_path = "/home/quyetnguyen/PycharmProjects/Laikago/simulation/Wedges/uphill/urdf/wedge_" + str(
                     self.incline_deg) + ".urdf"
 
                 self.INIT_ORIENTATION = self._pybullet_client.getQuaternionFromEuler(
@@ -272,7 +272,7 @@ class Solo12PybulletEnv(gym.Env):
                 self.INIT_POSITION = [self.INIT_POSITION[0], self.INIT_POSITION[1], self.robot_landing_height]
 
             else:
-                wedge_model_path = "SlopedTerrainLinearPolicy/gym_sloped_terrain/envs/Wedges/downhill/urdf/wedge_" + str(
+                wedge_model_path = "/home/quyetnguyen/PycharmProjects/Laikago/simulation/Wedges/downhill/urdf/wedge_" + str(
                     self.incline_deg) + ".urdf"
 
                 self.robot_landing_height = wedge_halfheight_offset + 0.65 + np.tan(
@@ -286,7 +286,7 @@ class Solo12PybulletEnv(gym.Env):
 
             self.SetWedgeFriction(0.7)
 
-        model_path = '/home/quyetnguyen/PycharmProjects/Laikago/SlopedTerrainLinearPolicy/gym_sloped_terrain/envs/robots/solo12/solo12.urdf'
+        model_path = '/home/quyetnguyen/PycharmProjects/Laikago/SlopedTerrainLinearPolicy/simulation/robots/solo12/solo12.urdf'
         self.solo12 = self._pybullet_client.loadURDF(model_path, self.INIT_POSITION, self.INIT_ORIENTATION)
 
         self._joint_name_to_id, self._motor_id_list = self.BuildMotorIdList()
@@ -334,7 +334,7 @@ class Solo12PybulletEnv(gym.Env):
             self.wedgeOrientation = self._pybullet_client.getQuaternionFromEuler([0, 0, self.incline_ori])
 
             if not self.downhill:
-                wedge_model_path = "gym_sloped_terrain/envs/Wedges/uphill/urdf/wedge_" + str(self.incline_deg) + ".urdf"
+                wedge_model_path = "/home/quyetnguyen/PycharmProjects/Laikago/simulation/Wedges/uphill/urdf/wedge_" + str(self.incline_deg) + ".urdf"
 
                 self.INIT_ORIENTATION = self._pybullet_client.getQuaternionFromEuler(
                     [math.radians(self.incline_deg) * math.sin(self.incline_ori),
@@ -346,7 +346,7 @@ class Solo12PybulletEnv(gym.Env):
                 self.INIT_POSITION = [self.INIT_POSITION[0], self.INIT_POSITION[1], self.robot_landing_height]
 
             else:
-                wedge_model_path = "gym_sloped_terrain/envs/Wedges/downhill/urdf/wedge_" + str(
+                wedge_model_path = "/home/quyetnguyen/PycharmProjects/Laikago/simulation/Wedges/downhill/urdf/wedge_" + str(
                     self.incline_deg) + ".urdf"
 
                 self.robot_landing_height = wedge_halfheight_offset + 0.65 + math.tan(

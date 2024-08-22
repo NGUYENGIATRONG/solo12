@@ -1,5 +1,5 @@
 
-import gym_sloped_terrain.solo12_pybulet_env as e
+import simulation.solo_pybulet_env as e
 import argparse
 from fabulous.color import blue, green, red, bold
 import numpy as np
