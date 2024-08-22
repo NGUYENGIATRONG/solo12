@@ -16,6 +16,7 @@ from gym.envs.registration import register
 
 import numpy as np
 
+
 PI = math.pi
 
 
@@ -359,7 +360,7 @@ if __name__ == "__main__":
     parser.add_argument('--seed', help='RNG seed', type=int, default=1234123)
     parser.add_argument('--render', help='OpenGL Visualizer', type=bool, default=False)
     parser.add_argument('--steps', help='Number of steps', type=int, default=10000)
-    parser.add_argument('--policy', help='Starting policy file (npy)', type=str, default='zeros12x11')
+    parser.add_argument('--policy', help='Starting policy file (npy)', type=str, default='initial_policy_HyQ.npy')
     parser.add_argument('--logdir', help='Directory root to log policy files (npy)', type=str, default=str(time.strftime("%d_%m")))
     parser.add_argument('--mp', help='Enable multiprocessing', type=bool, default=True)
     # these you have to set
@@ -400,7 +401,7 @@ if __name__ == "__main__":
         phase = custom_phase
     # Custom environments that you want to use ----------------------------------------------------------------------------------------
     register(id=args.env,
-             entry_point='simulation.solo_pybullet_env:Solo12PybulletEnv',
+             entry_point='simulation.solo_pybulet_env:Solo12PybulletEnv',
              kwargs={'gait': args.gait, 'render': False, 'action_dim': args.action_dim, 'stairs': args.stairs})
     # ---------------------------------------------------------------------------------------------------------------------------------
     start_time = time.time()

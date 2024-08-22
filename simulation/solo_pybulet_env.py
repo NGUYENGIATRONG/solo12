@@ -286,7 +286,7 @@ class Solo12PybulletEnv(gym.Env):
 
             self.SetWedgeFriction(0.7)
 
-        model_path = '/home/quyetnguyen/PycharmProjects/Laikago/SlopedTerrainLinearPolicy/simulation/robots/solo12/solo12.urdf'
+        model_path = '/home/quyetnguyen/PycharmProjects/Laikago/simulation/robots/solo12/solo12.urdf'
         self.solo12 = self._pybullet_client.loadURDF(model_path, self.INIT_POSITION, self.INIT_ORIENTATION)
 
         self._joint_name_to_id, self._motor_id_list = self.BuildMotorIdList()
@@ -588,7 +588,6 @@ class Solo12PybulletEnv(gym.Env):
         action[8:12] = (action[8:12] + 1) / 2  # el1ipse center y is positive always
 
         action[8:16] = self.getYXshift(action[8:16]) * 3
-
         action[16:20] = action[16:20] * 0.035 * 4
         action[17] = -action[17]
         action[19] = -action[19]
