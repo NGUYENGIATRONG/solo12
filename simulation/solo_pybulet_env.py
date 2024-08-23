@@ -879,7 +879,7 @@ class Solo12PybulletEnv(gym.Env):
         # motor_velocities = np.array(self.GetMotorVelocities(), dtype=np.float32)
         pos, ori = self.GetBasePosAndOrientation()
         RPY = self._pybullet_client.getEulerFromQuaternion(ori)
-        RPY = np.array(RPY, dtype=np.float32)
+        RPY = np.round(RPY, 5)
 
         for val in RPY:
             if self.add_IMU_noise:
