@@ -576,21 +576,15 @@ class Solo12PybulletEnv(gym.Env):
         Note : The convention of Cartesian axes for leg frame in the codebase follow this order, Y points up, X forward and Z right.
                While in research paper we follow this order, Z points up, X forward and Y right.
         '''
-
         action = np.clip(action, -1, 1)
 
         action[:4] = (action[:4] + 1) / 2  # Step lengths are positive always
 
-        action[:4] = action[:4] * 2 * 0.068 * 2  # Max steplength = 2x0.068
+        action[:4] = action[:4] * 0.16  # Max step length = 0.16
 
-        action[4:8] = action[4:8] * PI / 2  # PHI can be [-pi/2, pi/2]
+        action[4:8] = np.clip(action[4:8], -0.035, 0.035)  # x_shift
 
-        action[8:12] = (action[8:12] + 1) / 2  # el1ipse center y is positive always
-
-        action[8:16] = self.getYXshift(action[8:16]) * 3
-        action[16:20] = action[16:20] * 0.035 * 4
-        action[17] = -action[17]
-        action[19] = -action[19]
+        action[8:12] = np.clip(action[8:12], -0.015, 0.015)  # y_shift
         return action
 
     def get_foot_contacts(self):

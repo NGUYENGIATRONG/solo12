@@ -78,44 +78,44 @@ _CLOSE = 2
 _EXPLORE = 3
 
 
-def ExploreWorker(rank, child_Pipe, envname, arg):
-    env = gym.make(envname)
-    nb_inputs = env.observation_space.sample().shape[0]
-    _ = env.reset()
+def ExploreWorker(rank, child_pipe, envname, arg):
+    environment = gym.make(envname)
+    nb_inputs = environment.observation_space.sample().shape[0]
+    _ = environment.reset()
     n = 0
     while True:
         n += 1
         try:
             # Only block for short times to have keyboard exceptions be raised.
-            if not child_Pipe.poll(0.001):
+            if not child_pipe.poll(0.001):
                 continue
-            message, payload = child_Pipe.recv()
+            message, payload = child_pipe.recv()
         except (EOFError, KeyboardInterrupt):
             break
         if message == _RESET:
-            _ = env.reset()
-            child_Pipe.send(["reset ok"])
+            _ = environment.reset()
+            child_pipe.send(["reset ok"])
             continue
         if message == _EXPLORE:
-            policy = payload[0]
+            data = payload[0]
             hp = payload[1]
             direction = payload[2]
             delta = payload[3]
-            state = env.reset()
+            state = environment.reset()
             done = False
             num_plays = 0.
             sum_rewards = 0
             while num_plays < hp.episode_length:
-                action = policy.evaluate(state, delta, direction, hp)
-                state, reward, done, _ = env.step(action)
+                action = data.evaluate(state, delta, direction, hp)
+                state, reward, done, _ = environment.step(action)
                 sum_rewards += reward
                 num_plays += 1
-            childPipe.send([sum_rewards, num_plays])
+            child_pipe.send([sum_rewards, num_plays])
             continue
         if message == _CLOSE:
-            childPipe.send(["close ok"])
+            child_pipe.send(["close ok"])
             break
-    childPipe.close()
+    child_pipe.close()
 
 
 # Building the AI
@@ -151,21 +151,21 @@ class Policy:
 
 # Exploring the policy on one specific direction and over one episode
 
-def explore(env, policy, direction, delta, hp):
-    _ = env.observation_space.sample().shape[0]
-    state = env.reset()
+def explore(environment, data, direction, delta, hp):
+    _ = environment.observation_space.sample().shape[0]
+    state = environment.reset()
     done = False
     num_plays = 0.
     sum_rewards = 0
     while num_plays < hp.episode_length:
-        action = policy.evaluate(state, delta, direction, hp)
-        state, reward, done, _ = env.step(action)
+        action = data.evaluate(state, delta, direction, hp)
+        state, reward, done, _ = environment.step(action)
         sum_rewards += reward
         num_plays += 1
     return sum_rewards
 
 
-def policyevaluation(env, policy, hp):
+def policyevaluation(environment, data, hp):
     reward_evaluation = 0
 
     if hp.domain_Rand:
@@ -189,10 +189,10 @@ def policyevaluation(env, policy, hp):
                         for b in mb:
                             for s in ms:
                                 for t in ef:
-                                    env.Set_Randomization(default=True, idx1=j, idx2=i, idx3=k, idx0=f, idx11=b,
+                                    environment.Set_Randomization(default=True, idx1=j, idx2=i, idx3=k, idx0=f, idx11=b,
                                                                   idxc=s,
                                                                   idxp=t)
-                                    reward_evaluation = reward_evaluation + explore(env, policy, None, None, hp)
+                                    reward_evaluation = reward_evaluation + explore(environment, data, None, None, hp)
 
         reward_evaluation = reward_evaluation / total_combinations
 
@@ -206,8 +206,8 @@ def policyevaluation(env, policy, hp):
 
         for j in incline_deg_range:
             for i in incline_ori_range:
-                env.randomize_only_inclines(default=True, idx1=j, idx2=i)
-                reward_evaluation = reward_evaluation + explore(env, policy, None, None, hp)
+                environment.randomize_only_inclines(default=True, idx1=j, idx2=i)
+                reward_evaluation = reward_evaluation + explore(environment, data, None, None, hp)
 
         reward_evaluation = reward_evaluation / total_combinations
 
@@ -231,7 +231,7 @@ def create_unique_dir(base_name):
 
 
 # Training the AI
-def train(env, policy, hp, parent_pipes, info):
+def train(environment, data, hp, parent_pipes, info):
     # global process_count
     info.logdir = "experiments/" + info.logdir
     logger = DataLog()
@@ -256,19 +256,19 @@ def train(env, policy, hp, parent_pipes, info):
 
     for step in range(hp.nb_steps):
         if hp.domain_Rand:
-            env.Set_Randomization(default=False)
+            environment.Set_Randomization(default=False)
         else:
-            env.randomize_only_inclines()
+            environment.randomize_only_inclines()
         # Cirriculum learning
         if step > hp.curilearn:
             avail_deg = [9, 11, 13, 13, 15]
-            env.incline_deg = avail_deg[random.randint(0, 4)]
+            environment.incline_deg = avail_deg[random.randint(0, 4)]
         else:
             avail_deg = [7, 9]
-            env.incline_deg = avail_deg[random.randint(0, 1)]
+            environment.incline_deg = avail_deg[random.randint(0, 1)]
 
         # Initializing the perturbations deltas and the positive/negative rewards
-        deltas = policy.sample_deltas()
+        deltas = data.sample_deltas()
         positive_rewards = [0] * hp.nb_directions
         negative_rewards = [0] * hp.nb_directions
         if parent_pipes:
@@ -280,7 +280,7 @@ def train(env, policy, hp, parent_pipes, info):
 
                 for k in range(min([process_count, n_left])):
                     parent_pipe = parent_pipes[k]
-                    parent_pipe.send([_EXPLORE, [policy, hp, "positive", deltas[temp_p]]])
+                    parent_pipe.send([_EXPLORE, [data, hp, "positive", deltas[temp_p]]])
                     temp_p += 1
                 temp_p = p
                 for k in range(min([process_count, n_left])):
@@ -291,7 +291,7 @@ def train(env, policy, hp, parent_pipes, info):
 
                 for k in range(min([process_count, n_left])):
                     parent_Pipe = parent_pipes[k]
-                    parent_Pipe.send([_EXPLORE, [policy, hp, "negative", deltas[temp_p]]])
+                    parent_Pipe.send([_EXPLORE, [data, hp, "negative", deltas[temp_p]]])
                     temp_p = temp_p + 1
                 temp_p = temp_p
 
@@ -305,11 +305,11 @@ def train(env, policy, hp, parent_pipes, info):
         else:
             # Getting the positive rewards in the positive directions
             for k in range(hp.nb_directions):
-                positive_rewards[k] = explore(env, policy, "positive", deltas[k], hp)
+                positive_rewards[k] = explore(environment, data, "positive", deltas[k], hp)
 
             # Getting the negative rewards in the negative/opposite directions
             for k in range(hp.nb_directions):
-                negative_rewards[k] = explore(env, policy, "negative", deltas[k], hp)
+                negative_rewards[k] = explore(environment, data, "negative", deltas[k], hp)
 
         # Sorting the rollouts by the max(r_pos, r_neg) and selecting the best directions
         scores = {
@@ -323,22 +323,22 @@ def train(env, policy, hp, parent_pipes, info):
         all_rewards = np.array([x[0] for x in rollouts] + [x[1] for x in rollouts])
         sigma_r = all_rewards.std()  # Standard deviation of only rewards in the best directions is what it should be
         # Updating our policy
-        policy.update(rollouts, sigma_r, info)
+        data.update(rollouts, sigma_r, info)
 
         # Start evaluating after only second stage
         if step >= hp.curilearn:
             # policy evaluation after specified iterations
             if step % hp.evalstep == 0:
-                reward_evaluation = policyevaluation(env, policy, hp)
+                reward_evaluation = policyevaluation(environment, data, hp)
                 logger.log_kv('steps', step)
                 logger.log_kv('return', reward_evaluation)
                 if reward_evaluation > best_return:
-                    best_policy = policy.theta
+                    best_policy = data.theta
                     best_return = reward_evaluation
                     np.save(log_dir + "/iterations/best_policy.npy", best_policy)
                 print('Step:', step, 'Reward:', reward_evaluation)
                 policy_path = log_dir + "/iterations/" + "policy_" + str(step)
-                np.save(policy_path, policy.theta)
+                np.save(policy_path, data.theta)
 
                 logger.save_log(log_dir + "/logs/")
                 make_train_plots_ars(log=logger.log, keys=['steps', 'return'], save_loc=log_dir + "/logs/")
