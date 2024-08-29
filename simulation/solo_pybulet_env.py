@@ -6,7 +6,7 @@ import math
 import random
 from collections import deque
 import pybullet
-from simulation import pybullet_client
+from simulation import pybullet_client as pybullet_client
 from utils import solo12_kinematic
 
 import pybullet_data
@@ -79,31 +79,14 @@ class Solo12PybulletEnv(gym.Env):
 
         # global phase
 
-        self._is_stairs = stairs
-        self._is_wedge = wedge
-        self._is_render = render
-        self._on_rack = on_rack
         self.gait = gait
+        self.pd_control_enabled = True
+        self.x_init = 0
+        self.y_init = -0.23
         self.step_length = step_length / 2
         self.step_height = step_height
-        self.pd_control_enabled = True
-
-        self.rh_along_normal = 0.24
-        self.no_of_points = 100
-        self.seed_value = seed_value
-        random.seed(self.seed_value)
-        self._frequency = -3.5
-        self.termination_steps = end_steps
-        self.downhill = downhill
-
-        # PD gains
-        self._kp = 1600
-        self._kd = 90
-
-        self.dt = 0.005
-        self._frame_skip = 25
-        self._n_steps = 0
-        self._action_dim = action_dim
+        self.motor_offset = [np.pi / 2, 0, 0]
+        # self.phase = None
         self.plane = None
         self.solo12 = None
         self.new_fric_val = None
@@ -116,31 +99,55 @@ class Solo12PybulletEnv(gym.Env):
         self.wedgeOrientation = None
         self.robot_landing_height = None
         self.wedge = None
-        self._obs_dim = 11
-        self.x_init = 0
-        self.y_init = -0.23
-        self.action = np.zeros(self._action_dim)
-        self.leg_name_to_sol_branch_Solo12 = {'fl': 1, 'fr': 1, 'hl': 0, 'hr': 0}
-        self._last_base_position = [0, 0, 0]
-        self.last_yaw = 0
-        self._distance_limit = float("inf")
+        self._is_stairs = stairs
+        self._is_wedge = wedge
+        self._is_render = render
+        self._on_rack = on_rack
+        self.rh_along_normal = 0.24
         self.kinematic = solo12_kinematic.Solo12Kinematic()
-        self.current_com_height = 0.7
-        self.motor_offset = [np.pi / 2, 0, 0]
+        self.leg_name_to_sol_branch_Solo12 = {'fl': 1, 'fr': 1, 'hl': 0, 'hr': 0}
+        self.seed_value = seed_value
+        random.seed(self.seed_value)
+
         if self._is_render:
             self._pybullet_client = pybullet_client.BulletClient(connection_mode=pybullet.GUI)
         else:
             self._pybullet_client = pybullet_client.BulletClient()
 
         self._theta = 0
-        if self.gait == 'trot':
-            self.phase = [0, self.no_of_points, self.no_of_points, 0]
-        elif gait == 'walk':
-            self.phase = [0, self.no_of_points, 3 * self.no_of_points / 2, self.no_of_points / 2]
+
+        self._frequency = -3.5
+        self.termination_steps = end_steps
+        self.downhill = downhill
+
+        # PD gains
+        self._kp = 1600
+        self._kd = 90
+
+        self.dt = 0.005
+        self._frame_skip = 25
+        self._n_steps = 0
+        self._action_dim = action_dim
+
+        self._obs_dim = 11
+
+        self.action = np.zeros(self._action_dim)
+
+        self._last_base_position = [0, 0, 0]
+        self.last_yaw = 0
+        self._distance_limit = float("inf")
+
+        self.current_com_height = 0.7
+
         # wedge_parameters
         self.wedge_start = 0.5
-        # self.wedge_halflength = 2
-        self._walkcon = walking_controller.WalkingController(gait_type=self.gait, phase=self.phase)
+        self.wedge_halflength = 2
+
+        if self.gait == 'trot':
+            self.phase = [0, no_of_points, no_of_points, 0]
+        elif gait == 'walk':
+            self.phase = [0, no_of_points, 3 * no_of_points / 2, no_of_points / 2]
+        self._walkcon = walking_controller.WalkingController(gait_type=gait, phase=self.phase)
         self.inverse = False
         self._cam_dist = 1.0
         self._cam_yaw = 0.0
@@ -184,7 +191,7 @@ class Solo12PybulletEnv(gym.Env):
         self.x_f = 0
         self.y_f = 0
 
-        # Gym env related mandatory variables
+        ## Gym env related mandatory variables
         self._obs_dim = 3 * self.ori_history_length + 2  # [r,p,y]x previous time steps, suport plane roll and pitch
         observation_high = np.array([np.pi / 2] * self._obs_dim)
         observation_low = -observation_high
@@ -214,27 +221,6 @@ class Solo12PybulletEnv(gym.Env):
                                                              baseOrientation=[0.0, 0.0, 0.0, 1])
                 self.stairs.append(step)
                 self._pybullet_client.changeDynamics(step, -1, lateralFriction=0.8)
-        abduction_low = np.radians(-45)
-        abduction_high = np.radians(45)
-        other_motor_low = np.radians(-90)
-        other_motor_high = np.radians(90)
-
-        action_low = np.array([other_motor_low, other_motor_low, abduction_low,
-                               other_motor_low, other_motor_low, abduction_low,
-                               other_motor_low, other_motor_low, abduction_low,
-                               other_motor_low, other_motor_low, abduction_low], dtype=np.float32)
-
-        action_high = np.array([other_motor_high, other_motor_high, abduction_high,
-                                other_motor_high, other_motor_high, abduction_high,
-                                other_motor_high, other_motor_high, abduction_high,
-                                other_motor_high, other_motor_high, abduction_high], dtype=np.float32)
-        self.action_space = spaces.Box(low=action_low, high=action_high, dtype=np.float32)
-
-        observation_dim = len(self.GetObservation())
-        observation_low = -np.inf * np.ones(observation_dim, dtype=np.float32)
-        observation_high = np.inf * np.ones(observation_dim, dtype=np.float32)
-
-        self.observation_space = spaces.Box(low=observation_low, high=observation_high, dtype=np.float32)
 
     def hard_reset(self):
         """
@@ -318,10 +304,6 @@ class Solo12PybulletEnv(gym.Env):
         """
         self._theta = 0
         self._last_base_position = [0, 0, 0]
-        self._pybullet_client.resetBasePositionAndOrientation(self.solo12, self.INIT_POSITION, self.INIT_ORIENTATION)
-        self._pybullet_client.resetBaseVelocity(self.solo12, [0, 0, 0], [0, 0, 0])
-        self.reset_standing_position()
-        self._pybullet_client.resetDebugVisualizerCamera(self._cam_dist, self._cam_yaw, self._cam_pitch, [0, 0, 0])
         self.last_yaw = 0
         self.inverse = False
         if self._is_wedge:
@@ -334,7 +316,8 @@ class Solo12PybulletEnv(gym.Env):
             self.wedgeOrientation = self._pybullet_client.getQuaternionFromEuler([0, 0, self.incline_ori])
 
             if not self.downhill:
-                wedge_model_path = "/home/quyetnguyen/PycharmProjects/Laikago/simulation/Wedges/uphill/urdf/wedge_" + str(self.incline_deg) + ".urdf"
+                wedge_model_path = "/home/quyetnguyen/PycharmProjects/Laikago/simulation/Wedges/uphill/urdf/wedge_" + str(
+                    self.incline_deg) + ".urdf"
 
                 self.INIT_ORIENTATION = self._pybullet_client.getQuaternionFromEuler(
                     [math.radians(self.incline_deg) * math.sin(self.incline_ori),
@@ -358,7 +341,10 @@ class Solo12PybulletEnv(gym.Env):
 
             self.wedge = self._pybullet_client.loadURDF(wedge_model_path, self.wedgePos, self.wedgeOrientation)
             self.SetWedgeFriction(0.7)
-        # self._pybullet_client.resetDebugVisualizerCamera(self._cam_dist, self._cam_yaw, self._cam_pitch, [0, 0, 0])
+        self._pybullet_client.resetBasePositionAndOrientation(self.solo12, self.INIT_POSITION, self.INIT_ORIENTATION)
+        self._pybullet_client.resetBaseVelocity(self.solo12, [0, 0, 0], [0, 0, 0])
+        self.reset_standing_position()
+        self._pybullet_client.resetDebugVisualizerCamera(self._cam_dist, self._cam_yaw, self._cam_pitch, [0, 0, 0])
         self._n_steps = 0
         return self.GetObservation()
 
@@ -674,9 +660,9 @@ class Solo12PybulletEnv(gym.Env):
         return radial_v, current_w
 
     def do_simulation(self, action, n_frames):
-        '''
+        """
         Converts action parameters to corresponding motor commands with the help of a elliptical trajectory controller
-        '''
+        """
         omega = 2 * no_of_points * self._frequency
         self.action = action
         ii = 0
