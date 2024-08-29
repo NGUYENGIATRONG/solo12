@@ -667,7 +667,7 @@ class Solo12PybulletEnv(gym.Env):
         self.action = action
         ii = 0
 
-        leg_m_angle_cmd = self._walkcon.run_elliptical_Traj_HyQ(self._theta, action)
+        leg_m_angle_cmd = self._walkcon.run_elliptical_solo12(self._theta, action)
 
         self._theta = constrain_theta(omega * self.dt + self._theta)
 

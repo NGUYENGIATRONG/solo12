@@ -78,9 +78,9 @@ _CLOSE = 2
 _EXPLORE = 3
 
 
-def ExploreWorker(rank, child_pipe, envname, arg):
+def ExploreWorker(rank_p, child_pipe, envname, arg):
     environment = gym.make(envname)
-    nb_inputs = environment.observation_space.sample().shape[0]
+    # nb_inputs = environment.observation_space.sample().shape[0]
     _ = environment.reset()
     n = 0
     while True:
@@ -102,7 +102,7 @@ def ExploreWorker(rank, child_pipe, envname, arg):
             direction = payload[2]
             delta = payload[3]
             state = environment.reset()
-            done = False
+            # done = False
             num_plays = 0.
             sum_rewards = 0
             while num_plays < hp.episode_length:
@@ -152,9 +152,9 @@ class Policy:
 # Exploring the policy on one specific direction and over one episode
 
 def explore(environment, data, direction, delta, hp):
-    _ = environment.observation_space.sample().shape[0]
+    # _ = environment.observation_space.sample().shape[0]
     state = environment.reset()
-    done = False
+    # done = False
     num_plays = 0.
     sum_rewards = 0
     while num_plays < hp.episode_length:
@@ -165,9 +165,8 @@ def explore(environment, data, direction, delta, hp):
     return sum_rewards
 
 
-def policyevaluation(environment, data, hp):
+def policy_evaluation(environment, data, hp):
     reward_evaluation = 0
-
     if hp.domain_Rand:
 
         # Evaluation Dataset with domain randomization
@@ -175,39 +174,35 @@ def policyevaluation(environment, data, hp):
         incline_deg_range = [2, 3]  # 9, 11
         incline_ori_range = [0, 2, 3]  # 0, 60, 90 degree
         fric = [0, 1]  # surface friction 0.55, 0.6
-        mf = [0]  # extra mass at front 0gm
-        mb = [3]  # extra mass at back 150gm
-        ms = [0, 1]  # motorstrength 0.52, 0.6
-        ef = [0]  # pertubation force 0
+        ms = [0, 1]  # motor strength 0.52, 0.6
+        ef = [0]  # perturbation force 0
         # --------------------------------------------------------------
         total_combinations = (len(incline_deg_range) * len(incline_ori_range)
                               * len(fric) * len(ms) * len(ef))
         for j in incline_deg_range:
             for i in incline_ori_range:
                 for k in fric:
-                    for f in mf:
-                        for b in mb:
-                            for s in ms:
-                                for t in ef:
-                                    environment.Set_Randomization(default=True, idx1=j, idx2=i, idx3=k, idx0=f, idx11=b,
-                                                                  idxc=s,
-                                                                  idxp=t)
-                                    reward_evaluation = reward_evaluation + explore(environment, data, None, None, hp)
+                    for s in ms:
+                        for t in ef:
+                            environment.set_randomization(default=True, idx1=j, idx2=i, idx3=k, idxc=s, idxp=t)
+                            reward_evaluation += explore(environment, data, None, None, hp)
 
         reward_evaluation = reward_evaluation / total_combinations
 
     else:
         # Evaluation Dataset without domain randomization
         # --------------------------------------------------------------
-        incline_deg_range = [2, 3, 4]  # 11, 13
-        incline_ori_range = [0, 2, 3]  # 0, 30, 45 degree
+        # incline_deg_range = [2, 3, 4, 5]  # 9, 11, 13, 15
+        # incline_ori_range = [0, 2, 3]  # 0, 60, 90 degree
+        incline_deg_range = [2, 3]  # 9, 11
+        incline_ori_range = [0]
         # --------------------------------------------------------------
         total_combinations = len(incline_deg_range) * len(incline_ori_range)
 
         for j in incline_deg_range:
             for i in incline_ori_range:
                 environment.randomize_only_inclines(default=True, idx1=j, idx2=i)
-                reward_evaluation = reward_evaluation + explore(environment, data, None, None, hp)
+                reward_evaluation += explore(environment, data, None, None, hp)
 
         reward_evaluation = reward_evaluation / total_combinations
 
@@ -283,24 +278,28 @@ def train(environment, data, hp, parent_pipes, info):
                     parent_pipe.send([_EXPLORE, [data, hp, "positive", deltas[temp_p]]])
                     temp_p += 1
                 temp_p = p
-                for k in range(min([process_count, n_left])):
-                    positive_rewards[temp_p], step_count = parent_pipes[k].recv()
-                    total_steps = total_steps + step_count
-                    temp_p = temp_p + 1
-                temp_p = temp_p
 
                 for k in range(min([process_count, n_left])):
-                    parent_Pipe = parent_pipes[k]
-                    parent_Pipe.send([_EXPLORE, [data, hp, "negative", deltas[temp_p]]])
-                    temp_p = temp_p + 1
-                temp_p = temp_p
+                    positive_rewards[temp_p], step_count = parent_pipes[k].recv()
+                    total_steps += step_count
+                    temp_p += 1
+                temp_p = p
+
+                for k in range(min([process_count, n_left])):
+                    parent_pipe = parent_pipes[k]
+                    parent_pipe.send([_EXPLORE, [data, hp, "negative", deltas[temp_p]]])
+                    temp_p += 1
+                temp_p = p
 
                 for k in range(min([process_count, n_left])):
                     negative_rewards[temp_p], step_count = parent_pipes[k].recv()
-                    total_steps = total_steps + step_count
-                    temp_p = temp_p + 1
+                    total_steps += step_count
+                    temp_p += 1
                 p += process_count
-                print('total steps till now: ', total_steps, 'Processes done: ', temp_p)
+                # print('Total steps till now:', total_steps)
+                # print('Processes done:', p)
+                # print('Step main:', step)
+                # print("----------------------------------")
 
         else:
             # Getting the positive rewards in the positive directions
@@ -323,13 +322,18 @@ def train(environment, data, hp, parent_pipes, info):
         all_rewards = np.array([x[0] for x in rollouts] + [x[1] for x in rollouts])
         sigma_r = all_rewards.std()  # Standard deviation of only rewards in the best directions is what it should be
         # Updating our policy
-        data.update(rollouts, sigma_r, info)
+        data.update(rollouts, sigma_r)
+
+        # print("Total steps:", total_steps)
+        print('Step:', step)
+        # print('Best return:', best_return)
+        print("----------------------------------")
 
         # Start evaluating after only second stage
         if step >= hp.curilearn:
             # policy evaluation after specified iterations
             if step % hp.evalstep == 0:
-                reward_evaluation = policyevaluation(environment, data, hp)
+                reward_evaluation = policy_evaluation(environment, data, hp)
                 logger.log_kv('steps', step)
                 logger.log_kv('return', reward_evaluation)
                 if reward_evaluation > best_return:
@@ -359,14 +363,14 @@ if __name__ == "__main__":
     parser.add_argument('--env', help='Gym environment name', type=str, default='Solo12-v4')
     parser.add_argument('--seed', help='RNG seed', type=int, default=1234123)
     parser.add_argument('--render', help='OpenGL Visualizer', type=bool, default=False)
-    parser.add_argument('--steps', help='Number of steps', type=int, default=10000)
-    parser.add_argument('--policy', help='Starting policy file (npy)', type=str, default='initial_policy_HyQ.npy')
+    parser.add_argument('--steps', help='Number of steps', type=int, default=200)
+    parser.add_argument('--policy', help='Starting policy file (npy)', type=str, default='matrix_20x11.npy')
     parser.add_argument('--logdir', help='Directory root to log policy files (npy)', type=str, default=str(time.strftime("%d_%m")))
     parser.add_argument('--mp', help='Enable multiprocessing', type=bool, default=True)
     # these you have to set
     parser.add_argument('--lr', help='learning rate', type=float, default=0.2)
     parser.add_argument('--noise', help='noise hyperparameter', type=float, default=0.03)
-    parser.add_argument('--episode_length', help='length of each episode', type=float, default=10)
+    parser.add_argument('--episode_length', help='length of each episode', type=float, default=500)
     parser.add_argument('--normal', help='length of each episode', type=int, default=1)
     parser.add_argument('--gait', help='type of gait you want (Only in Stoch2 normal env', type=str, default='trot')
     parser.add_argument('--msg', help='msg to save in a text file', type=str, default='Old policy, new reward fuction')
@@ -421,6 +425,7 @@ if __name__ == "__main__":
     hyper_parameters.normal = args.normal
     hyper_parameters.gait = args.gait
     hyper_parameters.action_dim = args.action_dim
+    hyper_parameters.stairs = args.stairs
     hyper_parameters.curilearn = args.curi_learn
     hyper_parameters.evalstep = args.eval_step
     hyper_parameters.domain_Rand = args.domain_Rand
